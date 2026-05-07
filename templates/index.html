@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetWatch — Traffic Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:      #0d1117;
+  --card:    #161b22;
+  --card2:   #1c2128;
+  --border:  #30363d;
+  --text:    #c9d1d9;
+  --muted:   #8b949e;
+  --green:   #3fb950;
+  --blue:    #58a6ff;
+  --red:     #f85149;
+  --yellow:  #d29922;
+  --orange:  #e3b341;
+  --purple:  #bc8cff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+header {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+.logo { font-size: 17px; font-weight: bold; color: var(--green); letter-spacing: 1px; }
+.logo span { color: var(--blue); }
+.sep { color: var(--border); }
+.status-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s;
+  flex-shrink: 0;
+}
+.status-dot.live {
+  background: var(--green);
+  box-shadow: 0 0 7px var(--green);
+  animation: blink 1.5s ease-in-out infinite;
+}
+.status-dot.error { background: var(--red); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.45} }
+#statusMsg { color: var(--muted); font-size: 12px; min-width: 160px; }
+.spacer { flex: 1; }
+#pktRate { color: var(--blue); font-size: 12px; margin-right: 6px; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-start { background: #1a4d23; border-color: #2ea043; color: var(--green); }
+.btn-start:not(:disabled):hover { background: #216b2e; }
+.btn-stop  { background: #4a1010; border-color: var(--red); color: var(--red); }
+.btn-stop:not(:disabled):hover  { background: #6a1414; }
+.btn-ghost { background: transparent; color: var(--muted); }
+.btn-ghost:not(:disabled):hover { color: var(--text); border-color: var(--muted); }
+
+/* ── Layout ──────────────────────────────────────────────── */
+.main { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Stat cards ──────────────────────────────────────────── */
+.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.stat-value { font-size: 26px; font-weight: bold; margin-top: 4px; line-height: 1; }
+.c-green  { color: var(--green);  }
+.c-blue   { color: var(--blue);   }
+.c-red    { color: var(--red);    }
+.c-orange { color: var(--orange); }
+
+/* ── Middle row ──────────────────────────────────────────── */
+.mid-row { display: grid; grid-template-columns: 270px 1fr; gap: 12px; }
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.panel-head {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-head-right { color: var(--blue); font-size: 11px; }
+
+/* chart */
+.chart-wrap { padding: 14px; height: 230px; display: flex; align-items: center; justify-content: center; }
+#protoChart { max-width: 200px; max-height: 200px; }
+
+/* top IPs */
+.top-ips-body { overflow-y: auto; max-height: 230px; }
+table.ips { width: 100%; border-collapse: collapse; }
+table.ips th {
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 10px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: var(--card);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+table.ips td { padding: 5px 12px; border-bottom: 1px solid #1c2128; }
+table.ips tr:hover td { background: var(--card2); }
+.bar-wrap { height: 4px; background: #21262d; border-radius: 2px; margin-top: 3px; }
+.bar-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width .4s; }
+
+/* ── Anomaly alerts ───────────────────────────────────────── */
+.anomaly-scroll { max-height: 130px; overflow-y: auto; padding: 8px; }
+.alert-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #1a0808;
+  border: 1px solid #4a1212;
+  margin-bottom: 6px;
+  animation: slideIn .25s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+.alert-icon { color: var(--red); font-size: 13px; margin-top: 1px; flex-shrink: 0; }
+.alert-body { flex: 1; min-width: 0; }
+.alert-ips  { color: var(--text); font-size: 12px; }
+.alert-why  { color: #f07070; font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alert-ts   { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+.no-alerts  { color: var(--muted); text-align: center; padding: 22px; font-size: 12px; }
+
+/* ── Packet table ─────────────────────────────────────────── */
+.filter-bar {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.filter-label { color: var(--muted); font-size: 11px; }
+select, input[type="text"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: 12px;
+}
+select:focus, input:focus { outline: none; border-color: var(--blue); }
+input[type="checkbox"] { accent-color: var(--blue); cursor: pointer; }
+#rowCount { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+.tbl-wrap { overflow-y: auto; max-height: 380px; }
+table.pkts { width: 100%; border-collapse: collapse; }
+table.pkts th {
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 10px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: var(--card);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  white-space: nowrap;
+}
+table.pkts td {
+  padding: 4px 12px;
+  border-bottom: 1px solid #1c2128;
+  white-space: nowrap;
+  font-size: 12px;
+}
+table.pkts tr:hover td { background: var(--card2); }
+table.pkts tr.is-anomaly td { background: #180909; }
+table.pkts tr.is-anomaly:hover td { background: #200b0b; }
+
+/* badges */
+.badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: bold;
+}
+.b-TCP   { background:#0d2137; color:var(--blue);   border:1px solid #1f4f7a; }
+.b-UDP   { background:#0f2d0f; color:var(--green);  border:1px solid #2a5c2a; }
+.b-ICMP  { background:#2d1f00; color:var(--orange); border:1px solid #5c4300; }
+.b-OTHER { background:#1d1527; color:var(--purple); border:1px solid #4a3573; }
+
+.flag-cell { color: var(--red); font-size: 11px; cursor: help; }
+.empty-row { color: var(--muted); text-align: center; padding: 32px; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<header>
+  <div class="logo">NET<span>WATCH</span></div>
+  <div class="sep">|</div>
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusMsg">Connecting…</span>
+  <div class="spacer"></div>
+  <span id="pktRate">— pkt/s</span>
+  <button class="btn btn-start" id="btnStart" onclick="startCapture()" disabled>&#9654; Start</button>
+  <button class="btn btn-stop"  id="btnStop"  onclick="stopCapture()"  disabled>&#9646;&#9646; Stop</button>
+  <button class="btn btn-ghost" onclick="resetAll()" style="font-size:11px">&#8635; Reset</button>
+</header>
+
+<!-- ═══════════════════════════ MAIN ════════════════════════════ -->
+<div class="main">
+
+  <!-- Stat cards -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Packets</div>
+      <div class="stat-value c-green" id="sTot">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">TCP</div>
+      <div class="stat-value c-blue" id="sTCP">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">UDP</div>
+      <div class="stat-value c-green" id="sUDP">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Anomalies Flagged</div>
+      <div class="stat-value c-red" id="sAnom">0</div>
+    </div>
+  </div>
+
+  <!-- Chart + Top IPs -->
+  <div class="mid-row">
+    <!-- Protocol pie -->
+    <div class="panel">
+      <div class="panel-head">Protocol Distribution</div>
+      <div class="chart-wrap">
+        <canvas id="protoChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Top source IPs -->
+    <div class="panel">
+      <div class="panel-head">
+        Top Source IPs
+        <span class="panel-head-right" id="ipTracked">0 tracked</span>
+      </div>
+      <div class="top-ips-body">
+        <table class="ips">
+          <thead><tr><th>#</th><th>Source IP</th><th>Packets</th><th style="min-width:90px">Volume</th></tr></thead>
+          <tbody id="ipTbody"><tr><td colspan="4" class="empty-row">No traffic yet</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Anomaly alerts -->
+  <div class="panel">
+    <div class="panel-head">
+      Anomaly Alerts
+      <button class="btn btn-ghost" style="padding:2px 10px;font-size:11px" onclick="clearAlerts()">Clear</button>
+    </div>
+    <div class="anomaly-scroll" id="alertList">
+      <div class="no-alerts">No anomalies detected yet</div>
+    </div>
+  </div>
+
+  <!-- Packet table -->
+  <div class="panel">
+    <div class="filter-bar">
+      <span class="filter-label">Protocol:</span>
+      <select id="fProto" onchange="markDirty()">
+        <option value="">All</option>
+        <option>TCP</option><option>UDP</option><option>ICMP</option><option>OTHER</option>
+      </select>
+      <span class="filter-label">IP:</span>
+      <input type="text" id="fIP" placeholder="filter by IP…" oninput="markDirty()" style="width:150px">
+      <span class="filter-label">Anomalies only:</span>
+      <input type="checkbox" id="fAnom" onchange="markDirty()">
+      <span id="rowCount" >0 rows</span>
+      <button class="btn btn-ghost" style="padding:3px 10px;font-size:11px" onclick="clearPackets()">Clear table</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="pkts">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Protocol</th>
+            <th>Src IP</th>
+            <th>Src Port</th>
+            <th>Dst IP</th>
+            <th>Dst Port</th>
+            <th>Size (B)</th>
+            <th>Flags</th>
+          </tr>
+        </thead>
+        <tbody id="pktTbody"><tr><td colspan="8" class="empty-row">Waiting for packets…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ═══════════════════════════ SCRIPT ══════════════════════════ -->
+<script>
+'use strict';
+
+// ── Constants ──────────────────────────────────────────────────
+const MAX_PACKETS   = 500;
+const MAX_ALERTS    = 25;
+const RENDER_FPS    = 15;               // table/ip refresh cap
+const CHART_MS      = 800;             // chart refresh interval
+
+// ── State ──────────────────────────────────────────────────────
+let packets      = [];
+let alerts       = [];
+let protoCounts  = { TCP:0, UDP:0, ICMP:0, OTHER:0 };
+let ipCounts     = {};
+let totalPkts    = 0;
+let anomalyCount = 0;
+let capturing    = false;
+let prevTot      = 0;
+
+// dirty flags for batched rendering
+let tblDirty   = false;
+let ipDirty    = false;
+let chartDirty = false;
+
+// ── Chart ──────────────────────────────────────────────────────
+const protoChart = new Chart(
+  document.getElementById('protoChart').getContext('2d'),
+  {
+    type: 'doughnut',
+    data: {
+      labels: ['TCP','UDP','ICMP','OTHER'],
+      datasets: [{
+        data: [0,0,0,0],
+        backgroundColor: ['#0d2137','#0f2d0f','#2d1f00','#1d1527'],
+        borderColor:     ['#58a6ff','#3fb950','#e3b341','#bc8cff'],
+        borderWidth: 1,
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      cutout: '62%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color:'#8b949e', font:{family:'Consolas',size:11}, boxWidth:10, padding:10 }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()}`
+          }
+        }
+      }
+    }
+  }
+);
+
+// ── Socket ─────────────────────────────────────────────────────
+const socket = io();
+
+socket.on('connect',    () => updateHeader(capturing, 'Connected'));
+socket.on('disconnect', () => updateHeader(false, 'Disconnected'));
+
+socket.on('status', d => {
+  capturing = d.capturing;
+  updateHeader(capturing, d.message);
+});
+
+socket.on('packet', pkt => {
+  totalPkts++;
+  protoCounts[pkt.protocol] = (protoCounts[pkt.protocol] || 0) + 1;
+  ipCounts[pkt.src_ip]      = (ipCounts[pkt.src_ip]      || 0) + 1;
+
+  // Fast stat-card updates (cheap DOM writes)
+  document.getElementById('sTot').textContent = fmt(totalPkts);
+  document.getElementById('sTCP').textContent = fmt(protoCounts.TCP || 0);
+  document.getElementById('sUDP').textContent = fmt(protoCounts.UDP || 0);
+
+  packets.unshift(pkt);
+  if (packets.length > MAX_PACKETS) packets.pop();
+
+  tblDirty  = true;
+  ipDirty   = true;
+  chartDirty = true;
+});
+
+socket.on('anomaly', a => {
+  anomalyCount++;
+  document.getElementById('sAnom').textContent = fmt(anomalyCount);
+  alerts.unshift(a);
+  if (alerts.length > MAX_ALERTS) alerts.pop();
+  renderAlerts();
+});
+
+socket.on('stats_reset', () => {
+  packets = []; alerts = []; protoCounts = {TCP:0,UDP:0,ICMP:0,OTHER:0};
+  ipCounts = {}; totalPkts = 0; anomalyCount = 0; prevTot = 0;
+  document.getElementById('sTot').textContent  = '0';
+  document.getElementById('sTCP').textContent  = '0';
+  document.getElementById('sUDP').textContent  = '0';
+  document.getElementById('sAnom').textContent = '0';
+  renderAlerts(); tblDirty = true; ipDirty = true; chartDirty = true;
+});
+
+// ── Capture controls ───────────────────────────────────────────
+function startCapture() { socket.emit('start_capture'); }
+function stopCapture()  { socket.emit('stop_capture');  }
+function resetAll()     { socket.emit('reset_stats');   }
+
+// ── Header / status ────────────────────────────────────────────
+function updateHeader(live, msg) {
+  const dot  = document.getElementById('statusDot');
+  const txt  = document.getElementById('statusMsg');
+  const bS   = document.getElementById('btnStart');
+  const bE   = document.getElementById('btnStop');
+  dot.className  = 'status-dot' + (live ? ' live' : '');
+  txt.textContent = msg || (live ? 'Capturing' : 'Idle');
+  bS.disabled = live;
+  bE.disabled = !live;
+}
+
+// ── Render loop ─────────────────────────────────────────────────
+setInterval(() => {
+  if (tblDirty)   { renderTable();  tblDirty   = false; }
+  if (ipDirty)    { renderTopIPs(); ipDirty    = false; }
+}, Math.round(1000 / RENDER_FPS));
+
+setInterval(() => {
+  if (chartDirty) { refreshChart(); chartDirty = false; }
+}, CHART_MS);
+
+// packet-rate display
+setInterval(() => {
+  const rate = totalPkts - prevTot;
+  prevTot = totalPkts;
+  document.getElementById('pktRate').textContent = `${rate.toLocaleString()} pkt/s`;
+}, 1000);
+
+// ── Filter helpers ─────────────────────────────────────────────
+function markDirty() { tblDirty = true; }
+
+function getFiltered() {
+  const proto = document.getElementById('fProto').value;
+  const ip    = document.getElementById('fIP').value.trim();
+  const aOnly = document.getElementById('fAnom').checked;
+  return packets.filter(p => {
+    if (proto && p.protocol !== proto) return false;
+    if (ip && !p.src_ip.includes(ip) && !p.dst_ip.includes(ip)) return false;
+    if (aOnly && (!p.anomalies || p.anomalies.length === 0)) return false;
+    return true;
+  });
+}
+
+// ── Render: packet table ───────────────────────────────────────
+function renderTable() {
+  const rows = getFiltered();
+  document.getElementById('rowCount').textContent = `${rows.length.toLocaleString()} rows`;
+  const tbody = document.getElementById('pktTbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-row">${
+      packets.length ? 'No packets match the current filter' : 'Waiting for packets…'
+    }</td></tr>`;
+    return;
+  }
+  const slice = rows.slice(0, 250);
+  tbody.innerHTML = slice.map(p => {
+    const isA = p.anomalies && p.anomalies.length > 0;
+    const flag = isA
+      ? `<span class="flag-cell" title="${escHtml(p.anomalies.join(' | '))}">⚠ ${p.anomalies.length}</span>`
+      : '';
+    return `<tr class="${isA ? 'is-anomaly' : ''}">
+      <td>${p.timestamp}</td>
+      <td><span class="badge b-${p.protocol}">${p.protocol}</span></td>
+      <td>${p.src_ip}</td>
+      <td>${p.src_port ?? '—'}</td>
+      <td>${p.dst_ip}</td>
+      <td>${p.dst_port ?? '—'}</td>
+      <td>${p.size}</td>
+      <td>${flag}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render: top IPs ────────────────────────────────────────────
+function renderTopIPs() {
+  const sorted  = Object.entries(ipCounts).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  const tracked = Object.keys(ipCounts).length;
+  document.getElementById('ipTracked').textContent = `${tracked.toLocaleString()} tracked`;
+  const tbody = document.getElementById('ipTbody');
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No traffic yet</td></tr>';
+    return;
+  }
+  const max = sorted[0][1] || 1;
+  tbody.innerHTML = sorted.map(([ip, cnt], i) => {
+    const pct = Math.round(cnt / max * 100);
+    return `<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="color:var(--blue)">${ip}</td>
+      <td>${fmt(cnt)}</td>
+      <td><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render: chart ──────────────────────────────────────────────
+function refreshChart() {
+  protoChart.data.datasets[0].data = [
+    protoCounts.TCP   || 0,
+    protoCounts.UDP   || 0,
+    protoCounts.ICMP  || 0,
+    protoCounts.OTHER || 0,
+  ];
+  protoChart.update('none');
+}
+
+// ── Render: alerts ─────────────────────────────────────────────
+function renderAlerts() {
+  const el = document.getElementById('alertList');
+  if (alerts.length === 0) {
+    el.innerHTML = '<div class="no-alerts">No anomalies detected yet</div>';
+    return;
+  }
+  el.innerHTML = alerts.map(a => `
+    <div class="alert-item">
+      <span class="alert-icon">⚠</span>
+      <div class="alert-body">
+        <div class="alert-ips">${a.src_ip} <span style="color:var(--muted)">→</span> ${a.dst_ip}</div>
+        <div class="alert-why">${escHtml(a.reasons.join(' | '))}</div>
+      </div>
+      <span class="alert-ts">${a.timestamp}</span>
+    </div>`).join('');
+}
+
+// ── Utilities ──────────────────────────────────────────────────
+function clearAlerts()  { alerts = []; renderAlerts(); }
+function clearPackets() { packets = []; tblDirty = true; }
+function fmt(n)         { return Number(n).toLocaleString(); }
+function escHtml(s)     {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
