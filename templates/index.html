@@ -6,242 +6,174 @@
 <title>NetWatch — Traffic Analyzer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root {
-  --bg:      #0d1117;
-  --card:    #161b22;
-  --card2:   #1c2128;
-  --border:  #30363d;
-  --text:    #c9d1d9;
-  --muted:   #8b949e;
-  --green:   #3fb950;
-  --blue:    #58a6ff;
-  --red:     #f85149;
-  --yellow:  #d29922;
-  --orange:  #e3b341;
-  --purple:  #bc8cff;
+  --bg:#0d1117; --card:#161b22; --card2:#1c2128; --border:#30363d;
+  --text:#c9d1d9; --muted:#8b949e;
+  --green:#3fb950; --blue:#58a6ff; --red:#f85149;
+  --yellow:#d29922; --orange:#e3b341; --purple:#bc8cff;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 13px;
-  min-height: 100vh;
-}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Consolas','Courier New',monospace;font-size:13px;min-height:100vh}
 
-/* ── Header ─────────────────────────────────────────────── */
-header {
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 20px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-}
-.logo { font-size: 17px; font-weight: bold; color: var(--green); letter-spacing: 1px; }
-.logo span { color: var(--blue); }
-.sep { color: var(--border); }
-.status-dot {
-  width: 9px; height: 9px;
-  border-radius: 50%;
-  background: var(--muted);
-  transition: background 0.3s;
-  flex-shrink: 0;
-}
-.status-dot.live {
-  background: var(--green);
-  box-shadow: 0 0 7px var(--green);
-  animation: blink 1.5s ease-in-out infinite;
-}
-.status-dot.error { background: var(--red); }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.45} }
-#statusMsg { color: var(--muted); font-size: 12px; min-width: 160px; }
-.spacer { flex: 1; }
-#pktRate { color: var(--blue); font-size: 12px; margin-right: 6px; }
+/* ── Header ── */
+header{background:var(--card);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:500}
+.logo{font-size:17px;font-weight:bold;color:var(--green);letter-spacing:1px}
+.logo span{color:var(--blue)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.dot.live{background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+#statusMsg{color:var(--muted);font-size:12px;min-width:140px}
+.spacer{flex:1}
+#pktRate{color:var(--blue);font-size:12px}
 
-/* ── Buttons ─────────────────────────────────────────────── */
-.btn {
-  padding: 5px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  transition: all .15s;
-  white-space: nowrap;
-}
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-.btn-start { background: #1a4d23; border-color: #2ea043; color: var(--green); }
-.btn-start:not(:disabled):hover { background: #216b2e; }
-.btn-stop  { background: #4a1010; border-color: var(--red); color: var(--red); }
-.btn-stop:not(:disabled):hover  { background: #6a1414; }
-.btn-ghost { background: transparent; color: var(--muted); }
-.btn-ghost:not(:disabled):hover { color: var(--text); border-color: var(--muted); }
+/* ── Buttons ── */
+.btn{padding:5px 14px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-family:inherit;font-size:12px;transition:all .15s;white-space:nowrap}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-start{background:#1a4d23;border-color:#2ea043;color:var(--green)}
+.btn-start:not(:disabled):hover{background:#216b2e}
+.btn-stop{background:#4a1010;border-color:var(--red);color:var(--red)}
+.btn-stop:not(:disabled):hover{background:#6a1414}
+.btn-ghost{background:transparent;color:var(--muted)}
+.btn-ghost:not(:disabled):hover{color:var(--text);border-color:var(--muted)}
+.btn-blue{background:#0d2137;border-color:var(--blue);color:var(--blue)}
+.btn-blue:not(:disabled):hover{background:#163050}
 
-/* ── Layout ──────────────────────────────────────────────── */
-.main { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+/* ── Tab bar ── */
+.tabbar{background:var(--card);border-bottom:1px solid var(--border);display:flex;padding:0 18px;gap:2px}
+.tabbtn{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:10px 16px;cursor:pointer;font-family:inherit;font-size:11px;text-transform:uppercase;letter-spacing:.5px;transition:all .15s}
+.tabbtn.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tabbtn:hover:not(.active){color:var(--text)}
+.tabcontent{display:none}
+.tabcontent.active{display:block}
 
-/* ── Stat cards ──────────────────────────────────────────── */
-.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
-.stat-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 16px;
-}
-.stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-.stat-value { font-size: 26px; font-weight: bold; margin-top: 4px; line-height: 1; }
-.c-green  { color: var(--green);  }
-.c-blue   { color: var(--blue);   }
-.c-red    { color: var(--red);    }
-.c-orange { color: var(--orange); }
+/* ── Stat cards ── */
+.main{padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.stat-label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.stat-value{font-size:22px;font-weight:bold;margin-top:4px;line-height:1}
+.c-green{color:var(--green)}.c-blue{color:var(--blue)}.c-red{color:var(--red)}
+.c-orange{color:var(--orange)}.c-purple{color:var(--purple)}.c-yellow{color:var(--yellow)}
 
-/* ── Middle row ──────────────────────────────────────────── */
-.mid-row { display: grid; grid-template-columns: 270px 1fr; gap: 12px; }
-.panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.panel-head {
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--border);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.panel-head-right { color: var(--blue); font-size: 11px; }
+/* ── Panels ── */
+.panel{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.panel-head{padding:8px 14px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.panel-head-right{color:var(--blue);font-size:11px;white-space:nowrap}
 
-/* chart */
-.chart-wrap { padding: 14px; height: 230px; display: flex; align-items: center; justify-content: center; }
-#protoChart { max-width: 200px; max-height: 200px; }
+/* ── Dashboard mid row ── */
+.mid-row{display:grid;grid-template-columns:230px 1fr 260px;gap:12px}
+.chart-wrap{padding:14px;height:230px;display:flex;align-items:center;justify-content:center}
 
-/* top IPs */
-.top-ips-body { overflow-y: auto; max-height: 230px; }
-table.ips { width: 100%; border-collapse: collapse; }
-table.ips th {
-  padding: 7px 12px;
-  text-align: left;
-  font-size: 10px;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  position: sticky; top: 0;
-  background: var(--card);
-  text-transform: uppercase;
-  letter-spacing: .4px;
-}
-table.ips td { padding: 5px 12px; border-bottom: 1px solid #1c2128; }
-table.ips tr:hover td { background: var(--card2); }
-.bar-wrap { height: 4px; background: #21262d; border-radius: 2px; margin-top: 3px; }
-.bar-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width .4s; }
+/* ── Top IPs ── */
+.top-ips-body{overflow-y:auto;max-height:230px}
+table.ips{width:100%;border-collapse:collapse}
+table.ips th{padding:6px 12px;text-align:left;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);text-transform:uppercase}
+table.ips td{padding:5px 12px;border-bottom:1px solid #1c2128}
+table.ips tr:hover td{background:var(--card2)}
+.bar-wrap{height:4px;background:#21262d;border-radius:2px;margin-top:3px}
+.bar-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .4s}
 
-/* ── Anomaly alerts ───────────────────────────────────────── */
-.anomaly-scroll { max-height: 130px; overflow-y: auto; padding: 8px; }
-.alert-item {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 7px 10px;
-  border-radius: 6px;
-  background: #1a0808;
-  border: 1px solid #4a1212;
-  margin-bottom: 6px;
-  animation: slideIn .25s ease;
-}
-@keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
-.alert-icon { color: var(--red); font-size: 13px; margin-top: 1px; flex-shrink: 0; }
-.alert-body { flex: 1; min-width: 0; }
-.alert-ips  { color: var(--text); font-size: 12px; }
-.alert-why  { color: #f07070; font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.alert-ts   { color: var(--muted); font-size: 11px; flex-shrink: 0; }
-.no-alerts  { color: var(--muted); text-align: center; padding: 22px; font-size: 12px; }
+/* ── Anomaly alerts ── */
+.anomaly-scroll{max-height:130px;overflow-y:auto;padding:8px}
+.alert-item{display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border-radius:6px;background:#1a0808;border:1px solid #4a1212;margin-bottom:6px;animation:slideIn .25s ease}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+.alert-icon{color:var(--red);font-size:13px;flex-shrink:0;margin-top:1px}
+.alert-body{flex:1;min-width:0}
+.alert-ips{color:var(--text);font-size:12px}
+.alert-why{color:#f07070;font-size:11px;margin-top:2px}
+.alert-ts{color:var(--muted);font-size:11px;flex-shrink:0}
+.no-alerts{color:var(--muted);text-align:center;padding:22px;font-size:12px}
 
-/* ── Packet table ─────────────────────────────────────────── */
-.filter-bar {
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.filter-label { color: var(--muted); font-size: 11px; }
-select, input[type="text"] {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  padding: 4px 10px;
-  font-family: inherit;
-  font-size: 12px;
-}
-select:focus, input:focus { outline: none; border-color: var(--blue); }
-input[type="checkbox"] { accent-color: var(--blue); cursor: pointer; }
-#rowCount { color: var(--muted); font-size: 11px; margin-left: auto; }
+/* ── Packet table ── */
+.filter-bar{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.filter-label{color:var(--muted);font-size:11px}
+select,input[type=text]{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 10px;font-family:inherit;font-size:12px}
+select:focus,input:focus{outline:none;border-color:var(--blue)}
+input[type=checkbox]{accent-color:var(--blue);cursor:pointer}
+#rowCount{color:var(--muted);font-size:11px;margin-left:auto}
+.tbl-wrap{overflow-y:auto;max-height:360px}
+table.pkts{width:100%;border-collapse:collapse}
+table.pkts th{padding:7px 10px;text-align:left;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);text-transform:uppercase;white-space:nowrap}
+table.pkts td{padding:4px 10px;border-bottom:1px solid #1c2128;white-space:nowrap;font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+table.pkts tr:hover td{background:var(--card2)}
+table.pkts tr.is-anomaly td{background:#180909}
+table.pkts tr.is-anomaly:hover td{background:#200b0b}
+table.pkts tr.is-rule td{background:#0a0a1a}
+table.pkts tr.is-rule:hover td{background:#0d0d22}
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:bold}
+.b-TCP{background:#0d2137;color:var(--blue);border:1px solid #1f4f7a}
+.b-UDP{background:#0f2d0f;color:var(--green);border:1px solid #2a5c2a}
+.b-ICMP{background:#2d1f00;color:var(--orange);border:1px solid #5c4300}
+.b-OTHER{background:#1d1527;color:var(--purple);border:1px solid #4a3573}
+.flag-cell{color:var(--red);font-size:11px;cursor:help}
+.rule-cell{color:var(--blue);font-size:11px;cursor:help}
+.empty-row{color:var(--muted);text-align:center;padding:32px}
+.host{color:var(--muted);font-size:10px;display:block;margin-top:1px}
 
-.tbl-wrap { overflow-y: auto; max-height: 380px; }
-table.pkts { width: 100%; border-collapse: collapse; }
-table.pkts th {
-  padding: 7px 12px;
-  text-align: left;
-  font-size: 10px;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  position: sticky; top: 0;
-  background: var(--card);
-  text-transform: uppercase;
-  letter-spacing: .4px;
-  white-space: nowrap;
-}
-table.pkts td {
-  padding: 4px 12px;
-  border-bottom: 1px solid #1c2128;
-  white-space: nowrap;
-  font-size: 12px;
-}
-table.pkts tr:hover td { background: var(--card2); }
-table.pkts tr.is-anomaly td { background: #180909; }
-table.pkts tr.is-anomaly:hover td { background: #200b0b; }
+/* ── Bandwidth tab ── */
+.bw-wrap{padding:16px;height:340px}
+.bw-stats{display:flex;gap:20px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.bw-stat{text-align:center}
+.bw-stat-label{font-size:10px;color:var(--muted);text-transform:uppercase}
+.bw-stat-val{font-size:18px;font-weight:bold;color:var(--blue)}
 
-/* badges */
-.badge {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: bold;
-}
-.b-TCP   { background:#0d2137; color:var(--blue);   border:1px solid #1f4f7a; }
-.b-UDP   { background:#0f2d0f; color:var(--green);  border:1px solid #2a5c2a; }
-.b-ICMP  { background:#2d1f00; color:var(--orange); border:1px solid #5c4300; }
-.b-OTHER { background:#1d1527; color:var(--purple); border:1px solid #4a3573; }
+/* ── Connections tab ── */
+.conn-filter{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center}
+.conn-tbl-wrap{overflow-y:auto;max-height:480px}
+table.conns{width:100%;border-collapse:collapse}
+table.conns th{padding:7px 10px;text-align:left;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none}
+table.conns th:hover{color:var(--text)}
+table.conns th.sort-asc::after{content:' ▲'}
+table.conns th.sort-desc::after{content:' ▼'}
+table.conns td{padding:5px 10px;border-bottom:1px solid #1c2128;white-space:nowrap;font-size:12px}
+table.conns tr:hover td{background:var(--card2)}
 
-.flag-cell { color: var(--red); font-size: 11px; cursor: help; }
-.empty-row { color: var(--muted); text-align: center; padding: 32px; }
+/* ── Map tab ── */
+#mapWrap{height:520px;position:relative}
+#leaflet-map{height:100%;width:100%}
+.map-legend{position:absolute;bottom:16px;right:16px;z-index:1000;background:rgba(22,27,34,.9);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--muted)}
+.map-legend div{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* ── Rules tab ── */
+.rules-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:12px;padding:14px}
+.rule-form{display:flex;flex-direction:column;gap:8px}
+.rule-form label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.rule-form input,.rule-form select{width:100%}
+.rule-list{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.rule-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card2)}
+.rule-item-text{flex:1;font-size:12px}
+.rule-name{color:var(--blue);font-weight:bold}
+.rule-expr{color:var(--muted);font-size:11px;margin-top:2px}
+.rule-alerts-wrap{overflow-y:auto;max-height:400px;padding:8px}
+.rule-alert-item{padding:7px 10px;border-radius:6px;background:#0a0a1a;border:1px solid #1a1a3a;margin-bottom:6px;animation:slideIn .25s ease}
+.rule-alert-name{color:var(--blue);font-size:11px;font-weight:bold}
+.rule-alert-detail{color:var(--text);font-size:12px;margin-top:2px}
+.rule-alert-ts{color:var(--muted);font-size:10px}
+
+/* ── Export tab ── */
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:20px}
+.export-card{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:20px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.export-title{font-size:14px;font-weight:bold;color:var(--text)}
+.export-desc{font-size:12px;color:var(--muted);line-height:1.5}
+.export-meta{font-size:11px;color:var(--muted)}
 
 /* scrollbars */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<!-- ═══ HEADER ═══════════════════════════════════════════════════════════ -->
 <header>
   <div class="logo">NET<span>WATCH</span></div>
-  <div class="sep">|</div>
-  <div class="status-dot" id="statusDot"></div>
+  <div class="dot" id="dot"></div>
   <span id="statusMsg">Connecting…</span>
   <div class="spacer"></div>
   <span id="pktRate">— pkt/s</span>
@@ -250,127 +182,280 @@ table.pkts tr.is-anomaly:hover td { background: #200b0b; }
   <button class="btn btn-ghost" onclick="resetAll()" style="font-size:11px">&#8635; Reset</button>
 </header>
 
-<!-- ═══════════════════════════ MAIN ════════════════════════════ -->
-<div class="main">
+<!-- ═══ TAB BAR ══════════════════════════════════════════════════════════ -->
+<div class="tabbar">
+  <button class="tabbtn active" onclick="switchTab('dashboard')">Dashboard</button>
+  <button class="tabbtn" onclick="switchTab('bandwidth')">Bandwidth</button>
+  <button class="tabbtn" onclick="switchTab('connections')">Connections</button>
+  <button class="tabbtn" onclick="switchTab('map')">Geo Map</button>
+  <button class="tabbtn" onclick="switchTab('rules')">Alert Rules</button>
+  <button class="tabbtn" onclick="switchTab('export')">Export</button>
+</div>
 
-  <!-- Stat cards -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="stat-label">Total Packets</div>
-      <div class="stat-value c-green" id="sTot">0</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">TCP</div>
-      <div class="stat-value c-blue" id="sTCP">0</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">UDP</div>
-      <div class="stat-value c-green" id="sUDP">0</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Anomalies Flagged</div>
-      <div class="stat-value c-red" id="sAnom">0</div>
-    </div>
-  </div>
+<!-- ═══ ALWAYS-VISIBLE STAT CARDS ════════════════════════════════════════ -->
+<div class="main" id="mainWrap">
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-label">Total Packets</div><div class="stat-value c-green"  id="sTot">0</div></div>
+  <div class="stat-card"><div class="stat-label">TCP</div>            <div class="stat-value c-blue"   id="sTCP">0</div></div>
+  <div class="stat-card"><div class="stat-label">UDP</div>            <div class="stat-value c-green"  id="sUDP">0</div></div>
+  <div class="stat-card"><div class="stat-label">Anomalies</div>      <div class="stat-value c-red"    id="sAnom">0</div></div>
+  <div class="stat-card"><div class="stat-label">Bandwidth</div>      <div class="stat-value c-purple" id="sBW">— B/s</div></div>
+  <div class="stat-card"><div class="stat-label">Active Flows</div>   <div class="stat-value c-orange" id="sConns">0</div></div>
+</div>
 
-  <!-- Chart + Top IPs -->
+<!-- ═══ TAB: DASHBOARD ═══════════════════════════════════════════════════ -->
+<div id="tab-dashboard" class="tabcontent active">
+
+  <!-- mid row -->
   <div class="mid-row">
-    <!-- Protocol pie -->
     <div class="panel">
       <div class="panel-head">Protocol Distribution</div>
-      <div class="chart-wrap">
-        <canvas id="protoChart"></canvas>
-      </div>
+      <div class="chart-wrap"><canvas id="protoChart"></canvas></div>
     </div>
-
-    <!-- Top source IPs -->
     <div class="panel">
-      <div class="panel-head">
-        Top Source IPs
-        <span class="panel-head-right" id="ipTracked">0 tracked</span>
-      </div>
+      <div class="panel-head">Top Source IPs <span class="panel-head-right" id="ipTracked">0 tracked</span></div>
       <div class="top-ips-body">
         <table class="ips">
-          <thead><tr><th>#</th><th>Source IP</th><th>Packets</th><th style="min-width:90px">Volume</th></tr></thead>
-          <tbody id="ipTbody"><tr><td colspan="4" class="empty-row">No traffic yet</td></tr></tbody>
+          <thead><tr><th>#</th><th>IP / Hostname</th><th>Pkts</th><th>Country</th><th style="min-width:80px">Vol</th></tr></thead>
+          <tbody id="ipTbody"><tr><td colspan="5" class="empty-row">No traffic yet</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">Top Destinations <span class="panel-head-right" id="dstTracked">0</span></div>
+      <div class="top-ips-body">
+        <table class="ips">
+          <thead><tr><th>#</th><th>IP / Hostname</th><th>Pkts</th><th>Country</th></tr></thead>
+          <tbody id="dstTbody"><tr><td colspan="4" class="empty-row">No traffic yet</td></tr></tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Anomaly alerts -->
+  <!-- anomaly alerts -->
   <div class="panel">
-    <div class="panel-head">
-      Anomaly Alerts
+    <div class="panel-head">Anomaly Alerts
       <button class="btn btn-ghost" style="padding:2px 10px;font-size:11px" onclick="clearAlerts()">Clear</button>
     </div>
-    <div class="anomaly-scroll" id="alertList">
-      <div class="no-alerts">No anomalies detected yet</div>
-    </div>
+    <div class="anomaly-scroll" id="alertList"><div class="no-alerts">No anomalies detected yet</div></div>
   </div>
 
-  <!-- Packet table -->
+  <!-- packet table -->
   <div class="panel">
     <div class="filter-bar">
       <span class="filter-label">Protocol:</span>
       <select id="fProto" onchange="markDirty()">
-        <option value="">All</option>
-        <option>TCP</option><option>UDP</option><option>ICMP</option><option>OTHER</option>
+        <option value="">All</option><option>TCP</option><option>UDP</option><option>ICMP</option><option>OTHER</option>
       </select>
-      <span class="filter-label">IP:</span>
-      <input type="text" id="fIP" placeholder="filter by IP…" oninput="markDirty()" style="width:150px">
-      <span class="filter-label">Anomalies only:</span>
-      <input type="checkbox" id="fAnom" onchange="markDirty()">
-      <span id="rowCount" >0 rows</span>
-      <button class="btn btn-ghost" style="padding:3px 10px;font-size:11px" onclick="clearPackets()">Clear table</button>
+      <span class="filter-label">IP / Host:</span>
+      <input type="text" id="fIP" placeholder="filter…" oninput="markDirty()" style="width:140px">
+      <span class="filter-label">Anomalies:</span><input type="checkbox" id="fAnom" onchange="markDirty()">
+      <span class="filter-label">Rules:</span><input type="checkbox" id="fRule" onchange="markDirty()">
+      <span id="rowCount">0 rows</span>
+      <button class="btn btn-ghost" style="padding:3px 10px;font-size:11px" onclick="clearPackets()">Clear</button>
     </div>
     <div class="tbl-wrap">
       <table class="pkts">
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>Protocol</th>
-            <th>Src IP</th>
-            <th>Src Port</th>
-            <th>Dst IP</th>
-            <th>Dst Port</th>
-            <th>Size (B)</th>
-            <th>Flags</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th>Time</th><th>Proto</th>
+          <th>Src IP</th><th>SPort</th>
+          <th>Dst IP</th><th>DPort</th>
+          <th>Size</th><th>Flags</th>
+        </tr></thead>
         <tbody id="pktTbody"><tr><td colspan="8" class="empty-row">Waiting for packets…</td></tr></tbody>
       </table>
     </div>
   </div>
 
+</div><!-- /tab-dashboard -->
+
+<!-- ═══ TAB: BANDWIDTH ═══════════════════════════════════════════════════ -->
+<div id="tab-bandwidth" class="tabcontent">
+  <div class="panel">
+    <div class="panel-head">Bandwidth Over Time (bytes/sec, 2-minute window)
+      <span class="panel-head-right" id="bwPeak">Peak: 0 B/s</span>
+    </div>
+    <div class="bw-stats">
+      <div class="bw-stat"><div class="bw-stat-label">Current</div><div class="bw-stat-val" id="bwCur">0 B/s</div></div>
+      <div class="bw-stat"><div class="bw-stat-label">TCP</div>    <div class="bw-stat-val" id="bwTCP" style="color:var(--blue)">0 B/s</div></div>
+      <div class="bw-stat"><div class="bw-stat-label">UDP</div>    <div class="bw-stat-val" id="bwUDP" style="color:var(--green)">0 B/s</div></div>
+      <div class="bw-stat"><div class="bw-stat-label">ICMP</div>   <div class="bw-stat-val" id="bwICMP" style="color:var(--orange)">0 B/s</div></div>
+    </div>
+    <div class="bw-wrap"><canvas id="bwChart"></canvas></div>
+  </div>
+</div>
+
+<!-- ═══ TAB: CONNECTIONS ═════════════════════════════════════════════════ -->
+<div id="tab-connections" class="tabcontent">
+  <div class="panel">
+    <div class="panel-head">Active Flows
+      <span class="panel-head-right" id="connCount">0 flows</span>
+    </div>
+    <div class="conn-filter">
+      <span class="filter-label">IP:</span>
+      <input type="text" id="connIP" placeholder="filter by IP…" oninput="connMarkDirty()" style="width:140px">
+      <span class="filter-label">Protocol:</span>
+      <select id="connProto" onchange="connMarkDirty()">
+        <option value="">All</option><option>TCP</option><option>UDP</option><option>ICMP</option>
+      </select>
+      <span class="filter-label">Active only:</span>
+      <input type="checkbox" id="connActive" checked onchange="connMarkDirty()">
+    </div>
+    <div class="conn-tbl-wrap">
+      <table class="conns">
+        <thead><tr>
+          <th onclick="sortConn('proto')">Proto</th>
+          <th onclick="sortConn('src')">Source</th>
+          <th onclick="sortConn('dst')">Destination</th>
+          <th onclick="sortConn('packets')" class="sort-desc">Packets</th>
+          <th onclick="sortConn('bytes')">Data</th>
+          <th onclick="sortConn('duration')">Duration</th>
+          <th>Status</th>
+        </tr></thead>
+        <tbody id="connTbody"><tr><td colspan="7" class="empty-row">No connections yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB: GEO MAP ═════════════════════════════════════════════════════ -->
+<div id="tab-map" class="tabcontent">
+  <div class="panel">
+    <div class="panel-head">Geographic IP Distribution
+      <span class="panel-head-right" id="geoCount">0 IPs resolved</span>
+    </div>
+    <div id="mapWrap">
+      <div id="leaflet-map"></div>
+      <div class="map-legend">
+        <div><span class="leg-dot" style="background:#3fb950"></span>Low traffic</div>
+        <div><span class="leg-dot" style="background:#d29922"></span>Medium</div>
+        <div><span class="leg-dot" style="background:#f85149"></span>High traffic</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB: RULES ═══════════════════════════════════════════════════════ -->
+<div id="tab-rules" class="tabcontent">
+  <div class="rules-grid">
+    <!-- Rule builder -->
+    <div class="panel">
+      <div class="panel-head">Rule Builder</div>
+      <div style="padding:14px">
+        <div class="rule-form">
+          <div><label>Rule Name</label><input type="text" id="rName" placeholder="e.g. Block DNS" style="margin-top:4px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+            <div><label>Field</label>
+              <select id="rField" style="width:100%;margin-top:4px">
+                <option value="src_ip">Source IP</option>
+                <option value="dst_ip">Dest IP</option>
+                <option value="src_port">Src Port</option>
+                <option value="dst_port">Dst Port</option>
+                <option value="protocol">Protocol</option>
+                <option value="size">Packet Size</option>
+              </select>
+            </div>
+            <div><label>Operator</label>
+              <select id="rOp" style="width:100%;margin-top:4px">
+                <option value="==">== (equals)</option>
+                <option value="!=">!= (not equals)</option>
+                <option value=">">&gt; (greater than)</option>
+                <option value="<">&lt; (less than)</option>
+                <option value="contains">contains</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:4px"><label>Value</label><input type="text" id="rVal" placeholder="e.g. 53 or 8.8.8.8" style="margin-top:4px"></div>
+          <button class="btn btn-blue" onclick="addRule()" style="margin-top:8px;align-self:flex-start">+ Add Rule</button>
+        </div>
+        <div class="rule-list" id="ruleList"><div class="no-alerts">No rules defined</div></div>
+      </div>
+    </div>
+    <!-- Rule alert history -->
+    <div class="panel">
+      <div class="panel-head">Rule Alert History
+        <button class="btn btn-ghost" style="padding:2px 10px;font-size:11px" onclick="clearRuleAlerts()">Clear</button>
+      </div>
+      <div class="rule-alerts-wrap" id="ruleAlertList"><div class="no-alerts">No rule alerts yet</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB: EXPORT ═══════════════════════════════════════════════════════ -->
+<div id="tab-export" class="tabcontent">
+  <div class="panel">
+    <div class="panel-head">Packet Export
+      <span class="panel-head-right" id="exportCount">0 packets in buffer</span>
+    </div>
+    <div class="export-grid">
+      <div class="export-card">
+        <div class="export-title" style="color:var(--green)">CSV Export</div>
+        <div class="export-desc">Download the last 1,000 captured packets as a comma-separated file. Opens in Excel, Google Sheets, or any data analysis tool.</div>
+        <div class="export-meta">Fields: timestamp, protocol, src_ip, src_port, dst_ip, dst_port, size, anomalies, rule_alerts</div>
+        <button class="btn btn-blue" onclick="window.location='/api/export/csv'">&#8595; Download CSV</button>
+      </div>
+      <div class="export-card">
+        <div class="export-title" style="color:var(--blue)">PCAP Export</div>
+        <div class="export-desc">Download the last 1,000 captured packets in PCAP format. Compatible with Wireshark, tcpdump, and other packet analysis tools.</div>
+        <div class="export-meta">Format: libpcap, link type IP, readable by Wireshark 3.x+</div>
+        <button class="btn btn-blue" onclick="window.location='/api/export/pcap'">&#8595; Download PCAP</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /main -->
 
-<!-- ═══════════════════════════ SCRIPT ══════════════════════════ -->
 <script>
 'use strict';
 
-// ── Constants ──────────────────────────────────────────────────
-const MAX_PACKETS   = 500;
-const MAX_ALERTS    = 25;
-const RENDER_FPS    = 15;               // table/ip refresh cap
-const CHART_MS      = 800;             // chart refresh interval
+// ── Constants ──────────────────────────────────────────────────────────────
+const MAX_PACKETS  = 500;
+const MAX_ALERTS   = 25;
+const RENDER_FPS   = 15;
+const ACTIVE_SECS  = 60;   // flow "active" window
 
-// ── State ──────────────────────────────────────────────────────
-let packets      = [];
-let alerts       = [];
-let protoCounts  = { TCP:0, UDP:0, ICMP:0, OTHER:0 };
-let ipCounts     = {};
+// ── State ──────────────────────────────────────────────────────────────────
+let packets    = [];
+let alerts     = [];
+let ruleAlerts = [];
+let protoCounts  = {TCP:0,UDP:0,ICMP:0,OTHER:0};
+let ipCounts     = {};   // src ip -> count
+let dstCounts    = {};   // dst ip -> count
+let ipHostnames  = {};   // ip -> hostname
+let ipGeo        = {};   // ip -> {country,countryCode,lat,lon,isp}
+let connMap      = {};   // key -> flow object
+let bwHistory    = [];
+let alertRules   = [];
 let totalPkts    = 0;
 let anomalyCount = 0;
 let capturing    = false;
 let prevTot      = 0;
+let bwPeak       = 0;
 
-// dirty flags for batched rendering
-let tblDirty   = false;
-let ipDirty    = false;
+// dirty flags
+let tblDirty  = false;
+let ipDirty   = false;
 let chartDirty = false;
+let connDirty = false;
 
-// ── Chart ──────────────────────────────────────────────────────
+// ── Tab switching ─────────────────────────────────────────────────────────
+let currentTab = 'dashboard';
+let mapInitialized = false;
+
+function switchTab(name) {
+  document.querySelectorAll('.tabbtn').forEach((b,i) => {
+    const tabs = ['dashboard','bandwidth','connections','map','rules','export'];
+    b.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tabcontent').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  currentTab = name;
+  if (name === 'map') initMap();
+  if (name === 'connections') { connDirty = true; }
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────
 const protoChart = new Chart(
   document.getElementById('protoChart').getContext('2d'),
   {
@@ -381,33 +466,90 @@ const protoChart = new Chart(
         data: [0,0,0,0],
         backgroundColor: ['#0d2137','#0f2d0f','#2d1f00','#1d1527'],
         borderColor:     ['#58a6ff','#3fb950','#e3b341','#bc8cff'],
-        borderWidth: 1,
-        hoverOffset: 4,
+        borderWidth: 1, hoverOffset: 4,
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      cutout: '62%',
+      responsive: true, maintainAspectRatio: true, cutout: '60%',
       plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { color:'#8b949e', font:{family:'Consolas',size:11}, boxWidth:10, padding:10 }
-        },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()}`
-          }
-        }
+        legend: { position:'bottom', labels:{ color:'#8b949e', font:{family:'Consolas',size:11}, boxWidth:10, padding:10 }}
       }
     }
   }
 );
 
-// ── Socket ─────────────────────────────────────────────────────
+const bwChart = new Chart(
+  document.getElementById('bwChart').getContext('2d'),
+  {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {label:'TCP',  data:[], borderColor:'#58a6ff', backgroundColor:'#58a6ff18', fill:true, tension:.3, pointRadius:0, borderWidth:1.5},
+        {label:'UDP',  data:[], borderColor:'#3fb950', backgroundColor:'#3fb95018', fill:true, tension:.3, pointRadius:0, borderWidth:1.5},
+        {label:'ICMP', data:[], borderColor:'#e3b341', backgroundColor:'#e3b34118', fill:true, tension:.3, pointRadius:0, borderWidth:1.5},
+        {label:'OTHER',data:[], borderColor:'#bc8cff', backgroundColor:'#bc8cff18', fill:true, tension:.3, pointRadius:0, borderWidth:1.5},
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:false,
+      interaction:{mode:'index',intersect:false},
+      scales: {
+        x:{ ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12}, grid:{color:'#21262d'} },
+        y:{ stacked:true, ticks:{color:'#8b949e',font:{size:10},callback:v=>fmtBytes(v)+'/s'}, grid:{color:'#21262d'} },
+      },
+      plugins:{ legend:{ labels:{color:'#c9d1d9',font:{family:'Consolas',size:11},boxWidth:12} }}
+    }
+  }
+);
+
+// ── Leaflet map ───────────────────────────────────────────────────────────
+let leafMap  = null;
+let mapMarkers = {};   // ip -> L.circleMarker
+
+function initMap() {
+  if (mapInitialized) { leafMap && leafMap.invalidateSize(); return; }
+  mapInitialized = true;
+  leafMap = L.map('leaflet-map', {zoomControl:true}).setView([20, 0], 2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains:'abcd', maxZoom:19
+  }).addTo(leafMap);
+  // Place existing markers
+  Object.entries(ipGeo).forEach(([ip, g]) => { if (g) addMapMarker(ip, g); });
+}
+
+function markerColor(count) {
+  if (count > 500) return '#f85149';
+  if (count > 100) return '#d29922';
+  return '#3fb950';
+}
+
+function addMapMarker(ip, geo) {
+  if (!leafMap || !geo || geo.lat == null) return;
+  const count = (ipCounts[ip] || 0) + (dstCounts[ip] || 0);
+  const r     = Math.max(5, Math.min(22, Math.log(count + 1) * 3.5));
+  const color = markerColor(count);
+  const host  = ipHostnames[ip] || ip;
+  const popup = `<b>${ip}</b><br>${host !== ip ? host+'<br>' : ''}${geo.country || ''}<br><small>${geo.isp || ''}</small>`;
+
+  if (mapMarkers[ip]) {
+    mapMarkers[ip].setRadius(r).setStyle({color, fillColor:color}).setPopupContent(popup);
+  } else {
+    mapMarkers[ip] = L.circleMarker([geo.lat, geo.lon], {
+      radius:r, color, fillColor:color, fillOpacity:.55, weight:1.5
+    }).bindPopup(popup).addTo(leafMap);
+  }
+}
+
+function refreshMapMarkers() {
+  Object.keys(ipGeo).forEach(ip => { if (ipGeo[ip]) addMapMarker(ip, ipGeo[ip]); });
+}
+
+// ── Socket ────────────────────────────────────────────────────────────────
 const socket = io();
 
-socket.on('connect',    () => updateHeader(capturing, 'Connected'));
+socket.on('connect',    () => {});
 socket.on('disconnect', () => updateHeader(false, 'Disconnected'));
 
 socket.on('status', d => {
@@ -417,20 +559,23 @@ socket.on('status', d => {
 
 socket.on('packet', pkt => {
   totalPkts++;
-  protoCounts[pkt.protocol] = (protoCounts[pkt.protocol] || 0) + 1;
-  ipCounts[pkt.src_ip]      = (ipCounts[pkt.src_ip]      || 0) + 1;
+  protoCounts[pkt.protocol] = (protoCounts[pkt.protocol]||0)+1;
+  ipCounts[pkt.src_ip]  = (ipCounts[pkt.src_ip] ||0)+1;
+  dstCounts[pkt.dst_ip] = (dstCounts[pkt.dst_ip]||0)+1;
 
-  // Fast stat-card updates (cheap DOM writes)
   document.getElementById('sTot').textContent = fmt(totalPkts);
-  document.getElementById('sTCP').textContent = fmt(protoCounts.TCP || 0);
-  document.getElementById('sUDP').textContent = fmt(protoCounts.UDP || 0);
+  document.getElementById('sTCP').textContent = fmt(protoCounts.TCP||0);
+  document.getElementById('sUDP').textContent = fmt(protoCounts.UDP||0);
+  document.getElementById('exportCount').textContent = `${Math.min(totalPkts,1000).toLocaleString()} packets in buffer`;
 
   packets.unshift(pkt);
   if (packets.length > MAX_PACKETS) packets.pop();
 
-  tblDirty  = true;
-  ipDirty   = true;
-  chartDirty = true;
+  tblDirty = true; ipDirty = true; chartDirty = true;
+
+  if (mapInitialized) {
+    ['src_ip','dst_ip'].forEach(k => { if (ipGeo[pkt[k]]) addMapMarker(pkt[k], ipGeo[pkt[k]]); });
+  }
 });
 
 socket.on('anomaly', a => {
@@ -441,154 +586,344 @@ socket.on('anomaly', a => {
   renderAlerts();
 });
 
-socket.on('stats_reset', () => {
-  packets = []; alerts = []; protoCounts = {TCP:0,UDP:0,ICMP:0,OTHER:0};
-  ipCounts = {}; totalPkts = 0; anomalyCount = 0; prevTot = 0;
-  document.getElementById('sTot').textContent  = '0';
-  document.getElementById('sTCP').textContent  = '0';
-  document.getElementById('sUDP').textContent  = '0';
-  document.getElementById('sAnom').textContent = '0';
-  renderAlerts(); tblDirty = true; ipDirty = true; chartDirty = true;
+socket.on('rule_alert', a => {
+  ruleAlerts.unshift(a);
+  if (ruleAlerts.length > 500) ruleAlerts.pop();
+  if (currentTab === 'rules') renderRuleAlerts();
 });
 
-// ── Capture controls ───────────────────────────────────────────
-function startCapture() { socket.emit('start_capture'); }
-function stopCapture()  { socket.emit('stop_capture');  }
-function resetAll()     { socket.emit('reset_stats');   }
+socket.on('rule_history', list => { ruleAlerts = list; if (currentTab==='rules') renderRuleAlerts(); });
 
-// ── Header / status ────────────────────────────────────────────
+socket.on('dns', d => {
+  ipHostnames[d.ip] = d.hostname;
+  tblDirty = true; ipDirty = true; connDirty = true;
+  if (mapMarkers[d.ip] && ipGeo[d.ip]) addMapMarker(d.ip, ipGeo[d.ip]);
+});
+socket.on('dns_bulk', d => {
+  Object.assign(ipHostnames, d);
+  tblDirty = true; ipDirty = true; connDirty = true;
+});
+
+socket.on('geo', d => {
+  const {ip, ...geo} = d;
+  ipGeo[ip] = geo;
+  document.getElementById('geoCount').textContent = `${Object.keys(ipGeo).length} IPs resolved`;
+  if (mapInitialized) addMapMarker(ip, geo);
+});
+socket.on('geo_bulk', d => {
+  Object.assign(ipGeo, d);
+  document.getElementById('geoCount').textContent = `${Object.keys(ipGeo).length} IPs resolved`;
+  if (mapInitialized) refreshMapMarkers();
+});
+
+socket.on('bandwidth', snap => {
+  bwHistory.push(snap);
+  if (bwHistory.length > 120) bwHistory.shift();
+  const total = snap.total || 0;
+  if (total > bwPeak) { bwPeak = total; document.getElementById('bwPeak').textContent = `Peak: ${fmtBytes(bwPeak)}/s`; }
+  document.getElementById('sBW').textContent    = fmtBytes(total)+'/s';
+  document.getElementById('bwCur').textContent  = fmtBytes(total)+'/s';
+  document.getElementById('bwTCP').textContent  = fmtBytes(snap.TCP||0)+'/s';
+  document.getElementById('bwUDP').textContent  = fmtBytes(snap.UDP||0)+'/s';
+  document.getElementById('bwICMP').textContent = fmtBytes(snap.ICMP||0)+'/s';
+  refreshBWChart();
+});
+socket.on('bandwidth_history', hist => {
+  bwHistory = hist;
+  refreshBWChart();
+});
+
+socket.on('conn_update', c => {
+  connMap[c.key] = c;
+  const active = Object.values(connMap).filter(x => Date.now()/1000-x.last < ACTIVE_SECS).length;
+  document.getElementById('sConns').textContent = fmt(active);
+  connDirty = true;
+});
+socket.on('conn_bulk', list => {
+  connMap = {};
+  list.forEach(c => { connMap[c.key] = c; });
+  connDirty = true;
+});
+
+socket.on('rules_state', rules => { alertRules = rules; renderRules(); });
+socket.on('stats_reset', () => {
+  packets=[]; alerts=[]; ruleAlerts=[]; protoCounts={TCP:0,UDP:0,ICMP:0,OTHER:0};
+  ipCounts={}; dstCounts={}; ipHostnames={}; ipGeo={}; connMap={};
+  bwHistory=[]; totalPkts=0; anomalyCount=0; prevTot=0; bwPeak=0;
+  ['sTot','sTCP','sUDP','sAnom','sConns'].forEach(id=>document.getElementById(id).textContent='0');
+  document.getElementById('sBW').textContent='— B/s';
+  tblDirty=true; ipDirty=true; chartDirty=true; connDirty=true;
+  renderAlerts(); renderRuleAlerts();
+  if (mapInitialized) { Object.values(mapMarkers).forEach(m=>leafMap.removeLayer(m)); mapMarkers={}; }
+});
+
+// ── Capture controls ──────────────────────────────────────────────────────
+function startCapture() { socket.emit('start_capture'); }
+function stopCapture()  { socket.emit('stop_capture'); }
+function resetAll()     { socket.emit('reset_stats'); }
+
 function updateHeader(live, msg) {
-  const dot  = document.getElementById('statusDot');
-  const txt  = document.getElementById('statusMsg');
-  const bS   = document.getElementById('btnStart');
-  const bE   = document.getElementById('btnStop');
-  dot.className  = 'status-dot' + (live ? ' live' : '');
-  txt.textContent = msg || (live ? 'Capturing' : 'Idle');
-  bS.disabled = live;
-  bE.disabled = !live;
+  document.getElementById('dot').className     = 'dot'+(live?' live':'');
+  document.getElementById('statusMsg').textContent = msg||'';
+  document.getElementById('btnStart').disabled  = live;
+  document.getElementById('btnStop').disabled   = !live;
 }
 
-// ── Render loop ─────────────────────────────────────────────────
+// ── Render loop ───────────────────────────────────────────────────────────
 setInterval(() => {
-  if (tblDirty)   { renderTable();  tblDirty   = false; }
-  if (ipDirty)    { renderTopIPs(); ipDirty    = false; }
-}, Math.round(1000 / RENDER_FPS));
+  if (tblDirty)   { renderTable();  tblDirty  = false; }
+  if (ipDirty)    { renderTopIPs(); ipDirty   = false; }
+  if (chartDirty) { refreshProtoChart(); chartDirty = false; }
+  if (connDirty && currentTab === 'connections') { renderConns(); connDirty = false; }
+}, Math.round(1000/RENDER_FPS));
 
+// Packet rate
 setInterval(() => {
-  if (chartDirty) { refreshChart(); chartDirty = false; }
-}, CHART_MS);
-
-// packet-rate display
-setInterval(() => {
-  const rate = totalPkts - prevTot;
-  prevTot = totalPkts;
+  const rate = totalPkts - prevTot; prevTot = totalPkts;
   document.getElementById('pktRate').textContent = `${rate.toLocaleString()} pkt/s`;
 }, 1000);
 
-// ── Filter helpers ─────────────────────────────────────────────
+// ── Render: packet table ──────────────────────────────────────────────────
 function markDirty() { tblDirty = true; }
 
 function getFiltered() {
   const proto = document.getElementById('fProto').value;
-  const ip    = document.getElementById('fIP').value.trim();
+  const ip    = document.getElementById('fIP').value.trim().toLowerCase();
   const aOnly = document.getElementById('fAnom').checked;
+  const rOnly = document.getElementById('fRule').checked;
   return packets.filter(p => {
     if (proto && p.protocol !== proto) return false;
-    if (ip && !p.src_ip.includes(ip) && !p.dst_ip.includes(ip)) return false;
-    if (aOnly && (!p.anomalies || p.anomalies.length === 0)) return false;
+    if (ip) {
+      const srcH = (ipHostnames[p.src_ip]||'').toLowerCase();
+      const dstH = (ipHostnames[p.dst_ip]||'').toLowerCase();
+      if (!p.src_ip.includes(ip) && !p.dst_ip.includes(ip) && !srcH.includes(ip) && !dstH.includes(ip)) return false;
+    }
+    if (aOnly && !(p.anomalies && p.anomalies.length)) return false;
+    if (rOnly && !(p.rule_alerts && p.rule_alerts.length)) return false;
     return true;
   });
 }
 
-// ── Render: packet table ───────────────────────────────────────
 function renderTable() {
   const rows = getFiltered();
   document.getElementById('rowCount').textContent = `${rows.length.toLocaleString()} rows`;
   const tbody = document.getElementById('pktTbody');
-  if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-row">${
-      packets.length ? 'No packets match the current filter' : 'Waiting for packets…'
-    }</td></tr>`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-row">${packets.length?'No matching packets':'Waiting for packets…'}</td></tr>`;
     return;
   }
-  const slice = rows.slice(0, 250);
-  tbody.innerHTML = slice.map(p => {
-    const isA = p.anomalies && p.anomalies.length > 0;
-    const flag = isA
-      ? `<span class="flag-cell" title="${escHtml(p.anomalies.join(' | '))}">⚠ ${p.anomalies.length}</span>`
-      : '';
-    return `<tr class="${isA ? 'is-anomaly' : ''}">
+  tbody.innerHTML = rows.slice(0,200).map(p => {
+    const isA = p.anomalies && p.anomalies.length;
+    const isR = p.rule_alerts && p.rule_alerts.length;
+    const srcH = ipHostnames[p.src_ip];
+    const dstH = ipHostnames[p.dst_ip];
+    const flag = isA ? `<span class="flag-cell" title="${esc(p.anomalies.join(' | '))}">&#9888; ${p.anomalies.length}</span>` : '';
+    const ruleFlag = isR ? `<span class="rule-cell" title="${esc(p.rule_alerts.join(', '))}"> &#9654;${p.rule_alerts.length}</span>` : '';
+    return `<tr class="${isA?'is-anomaly':isR?'is-rule':''}">
       <td>${p.timestamp}</td>
       <td><span class="badge b-${p.protocol}">${p.protocol}</span></td>
-      <td>${p.src_ip}</td>
-      <td>${p.src_port ?? '—'}</td>
-      <td>${p.dst_ip}</td>
-      <td>${p.dst_port ?? '—'}</td>
+      <td title="${p.src_ip}">${srcH&&srcH!==p.src_ip?`<span class="host">${truncate(srcH,22)}</span>`:p.src_ip}</td>
+      <td>${p.src_port??'—'}</td>
+      <td title="${p.dst_ip}">${dstH&&dstH!==p.dst_ip?`<span class="host">${truncate(dstH,22)}</span>`:p.dst_ip}</td>
+      <td>${p.dst_port??'—'}</td>
       <td>${p.size}</td>
-      <td>${flag}</td>
+      <td>${flag}${ruleFlag}</td>
     </tr>`;
   }).join('');
 }
 
-// ── Render: top IPs ────────────────────────────────────────────
+// ── Render: Top IPs ───────────────────────────────────────────────────────
 function renderTopIPs() {
-  const sorted  = Object.entries(ipCounts).sort((a,b) => b[1]-a[1]).slice(0, 10);
-  const tracked = Object.keys(ipCounts).length;
-  document.getElementById('ipTracked').textContent = `${tracked.toLocaleString()} tracked`;
-  const tbody = document.getElementById('ipTbody');
-  if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No traffic yet</td></tr>';
-    return;
+  const srcSorted = Object.entries(ipCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const dstSorted = Object.entries(dstCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('ipTracked').textContent  = `${Object.keys(ipCounts).length} tracked`;
+  document.getElementById('dstTracked').textContent = Object.keys(dstCounts).length;
+
+  function renderIPTable(sorted, tbodyId, maxCount) {
+    const tbody = document.getElementById(tbodyId);
+    if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No traffic yet</td></tr>'; return; }
+    const mx = maxCount || (sorted[0]?.[1] || 1);
+    tbody.innerHTML = sorted.map(([ip,cnt],i) => {
+      const h   = ipHostnames[ip];
+      const geo = ipGeo[ip];
+      const pct = Math.round(cnt/mx*100);
+      const flag = geo?.countryCode ? getFlagEmoji(geo.countryCode) : '';
+      const country = geo?.country || '';
+      return `<tr>
+        <td style="color:var(--muted)">${i+1}</td>
+        <td title="${ip}" style="color:var(--blue)">${h&&h!==ip?truncate(h,22):ip}</td>
+        <td>${fmt(cnt)}</td>
+        <td title="${country}">${flag}</td>
+        <td><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+      </tr>`;
+    }).join('');
   }
-  const max = sorted[0][1] || 1;
-  tbody.innerHTML = sorted.map(([ip, cnt], i) => {
-    const pct = Math.round(cnt / max * 100);
-    return `<tr>
-      <td style="color:var(--muted)">${i+1}</td>
-      <td style="color:var(--blue)">${ip}</td>
-      <td>${fmt(cnt)}</td>
-      <td><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>
-    </tr>`;
-  }).join('');
+
+  const srcMax = srcSorted[0]?.[1]||1, dstMax = dstSorted[0]?.[1]||1;
+  renderIPTable(srcSorted, 'ipTbody',  srcMax);
+  renderIPTable(dstSorted, 'dstTbody', dstMax);
 }
 
-// ── Render: chart ──────────────────────────────────────────────
-function refreshChart() {
+// ── Render: Charts ────────────────────────────────────────────────────────
+function refreshProtoChart() {
   protoChart.data.datasets[0].data = [
-    protoCounts.TCP   || 0,
-    protoCounts.UDP   || 0,
-    protoCounts.ICMP  || 0,
-    protoCounts.OTHER || 0,
+    protoCounts.TCP||0, protoCounts.UDP||0, protoCounts.ICMP||0, protoCounts.OTHER||0
   ];
   protoChart.update('none');
 }
 
-// ── Render: alerts ─────────────────────────────────────────────
+function refreshBWChart() {
+  const h = bwHistory;
+  bwChart.data.labels                    = h.map(e=>e.ts);
+  bwChart.data.datasets[0].data          = h.map(e=>e.TCP||0);
+  bwChart.data.datasets[1].data          = h.map(e=>e.UDP||0);
+  bwChart.data.datasets[2].data          = h.map(e=>e.ICMP||0);
+  bwChart.data.datasets[3].data          = h.map(e=>e.OTHER||0);
+  bwChart.update('none');
+}
+
+// ── Render: Alerts ────────────────────────────────────────────────────────
 function renderAlerts() {
   const el = document.getElementById('alertList');
-  if (alerts.length === 0) {
-    el.innerHTML = '<div class="no-alerts">No anomalies detected yet</div>';
-    return;
-  }
-  el.innerHTML = alerts.map(a => `
+  if (!alerts.length) { el.innerHTML='<div class="no-alerts">No anomalies detected yet</div>'; return; }
+  el.innerHTML = alerts.map(a=>`
     <div class="alert-item">
-      <span class="alert-icon">⚠</span>
+      <span class="alert-icon">&#9888;</span>
       <div class="alert-body">
-        <div class="alert-ips">${a.src_ip} <span style="color:var(--muted)">→</span> ${a.dst_ip}</div>
-        <div class="alert-why">${escHtml(a.reasons.join(' | '))}</div>
+        <div class="alert-ips">${a.src_ip} <span style="color:var(--muted)">&#8594;</span> ${a.dst_ip}</div>
+        <div class="alert-why">${esc(a.reasons.join(' | '))}</div>
       </div>
       <span class="alert-ts">${a.timestamp}</span>
     </div>`).join('');
 }
 
-// ── Utilities ──────────────────────────────────────────────────
-function clearAlerts()  { alerts = []; renderAlerts(); }
-function clearPackets() { packets = []; tblDirty = true; }
-function fmt(n)         { return Number(n).toLocaleString(); }
-function escHtml(s)     {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function clearAlerts()  { alerts=[]; renderAlerts(); }
+function clearPackets() { packets=[]; tblDirty=true; }
+
+// ── Render: Connections ───────────────────────────────────────────────────
+let connSort = {col:'packets', dir:'desc'};
+let connDirtyFlag = false;
+
+function connMarkDirty() { connDirty = true; }
+
+function sortConn(col) {
+  if (connSort.col === col) connSort.dir = connSort.dir==='asc'?'desc':'asc';
+  else { connSort.col=col; connSort.dir='desc'; }
+  document.querySelectorAll('table.conns th').forEach(th=>{th.classList.remove('sort-asc','sort-desc')});
+  const cols = ['proto','src','dst','packets','bytes','duration'];
+  const idx = cols.indexOf(col);
+  if (idx>=0) {
+    const ths = document.querySelectorAll('table.conns th');
+    ths[idx].classList.add(connSort.dir==='asc'?'sort-asc':'sort-desc');
+  }
+  connDirty = true;
+}
+
+function renderConns() {
+  const ip    = document.getElementById('connIP').value.trim();
+  const proto = document.getElementById('connProto').value;
+  const aOnly = document.getElementById('connActive').checked;
+  const now   = Date.now()/1000;
+
+  let rows = Object.values(connMap).filter(c => {
+    if (aOnly && now - c.last > ACTIVE_SECS) return false;
+    if (proto && c.proto !== proto) return false;
+    if (ip && !c.src_ip.includes(ip) && !c.dst_ip.includes(ip)) return false;
+    return true;
+  });
+
+  rows.sort((a,b) => {
+    let av, bv;
+    switch(connSort.col) {
+      case 'proto':    av=a.proto; bv=b.proto; break;
+      case 'src':      av=a.src_ip; bv=b.src_ip; break;
+      case 'dst':      av=a.dst_ip; bv=b.dst_ip; break;
+      case 'bytes':    av=a.bytes; bv=b.bytes; break;
+      case 'duration': av=a.last-a.start; bv=b.last-b.start; break;
+      default:         av=a.packets; bv=b.packets;
+    }
+    return connSort.dir==='asc' ? (av>bv?1:-1) : (av<bv?1:-1);
+  });
+
+  document.getElementById('connCount').textContent = `${rows.length} flows`;
+  const tbody = document.getElementById('connTbody');
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="7" class="empty-row">No connections matching filter</td></tr>'; return; }
+
+  tbody.innerHTML = rows.slice(0,300).map(c => {
+    const srcH = ipHostnames[c.src_ip];
+    const dstH = ipHostnames[c.dst_ip];
+    const dur  = Math.round(c.last - c.start);
+    const active = now - c.last < ACTIVE_SECS;
+    return `<tr>
+      <td><span class="badge b-${c.proto}">${c.proto}</span></td>
+      <td title="${c.src_ip}:${c.src_port}">${srcH&&srcH!==c.src_ip?truncate(srcH,18):c.src_ip}:${c.src_port}</td>
+      <td title="${c.dst_ip}:${c.dst_port}">${dstH&&dstH!==c.dst_ip?truncate(dstH,18):c.dst_ip}:${c.dst_port}</td>
+      <td>${fmt(c.packets)}</td>
+      <td>${fmtBytes(c.bytes)}</td>
+      <td>${fmtDur(dur)}</td>
+      <td style="color:${active?'var(--green)':'var(--muted)'}">${active?'Active':'Idle'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render: Rules ─────────────────────────────────────────────────────────
+function renderRules() {
+  const el = document.getElementById('ruleList');
+  if (!alertRules.length) { el.innerHTML='<div class="no-alerts">No rules defined</div>'; return; }
+  el.innerHTML = alertRules.map(r=>`
+    <div class="rule-item">
+      <div class="rule-item-text">
+        <div class="rule-name">${esc(r.name)}</div>
+        <div class="rule-expr">${r.field} ${r.operator} "${esc(r.value)}"</div>
+      </div>
+      <button class="btn btn-ghost" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:#4a1010" onclick="removeRule('${r.id}')">&#10005;</button>
+    </div>`).join('');
+}
+
+function renderRuleAlerts() {
+  const el = document.getElementById('ruleAlertList');
+  if (!ruleAlerts.length) { el.innerHTML='<div class="no-alerts">No rule alerts yet</div>'; return; }
+  el.innerHTML = ruleAlerts.slice(0,100).map(a=>`
+    <div class="rule-alert-item">
+      <div class="rule-alert-name">&#9654; ${esc(a.rules.join(', '))}</div>
+      <div class="rule-alert-detail">${a.src_ip} &#8594; ${a.dst_ip} &nbsp;|&nbsp; ${a.proto} &nbsp;|&nbsp; ${a.size}B</div>
+      <div class="rule-alert-ts">${a.ts}</div>
+    </div>`).join('');
+}
+
+function clearRuleAlerts() { ruleAlerts=[]; renderRuleAlerts(); }
+
+function addRule() {
+  const name = document.getElementById('rName').value.trim();
+  const val  = document.getElementById('rVal').value.trim();
+  if (!name || !val) { alert('Name and Value are required.'); return; }
+  socket.emit('add_rule', {
+    name, field: document.getElementById('rField').value,
+    operator: document.getElementById('rOp').value, value: val
+  });
+  document.getElementById('rName').value = '';
+  document.getElementById('rVal').value  = '';
+}
+
+function removeRule(id) { socket.emit('remove_rule', {id}); }
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function fmt(n)        { return Number(n).toLocaleString(); }
+function esc(s)        { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function truncate(s,n) { return s.length>n ? s.slice(0,n)+'…' : s; }
+function fmtBytes(n)   {
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n/1024).toFixed(1)} KB`;
+  return `${(n/1048576).toFixed(2)} MB`;
+}
+function fmtDur(s) {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
+  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+}
+function getFlagEmoji(cc) {
+  if (!cc || cc.length!==2) return '';
+  return String.fromCodePoint(...[...cc.toUpperCase()].map(c=>0x1F1E6+c.charCodeAt(0)-65));
 }
 </script>
 </body>
