@@ -2,7 +2,7 @@
 
 A live network traffic analyzer with a Python/Scapy backend and a real-time browser dashboard.
 
-![Dashboard](https://img.shields.io/badge/dashboard-live-3fb950) ![Python](https://img.shields.io/badge/python-3.10%2B-58a6ff) ![License](https://img.shields.io/badge/license-MIT-bc8cff)
+![Dashboard](https://img.shields.io/badge/dashboard-live-3fb950) ![Python](https://img.shields.io/badge/python-3.10%2B-58a6ff) ![License](https://img.shields.io/badge/license-proprietary-red)
 
 ## Features
 
