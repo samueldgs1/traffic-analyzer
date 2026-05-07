@@ -42,7 +42,7 @@ header{background:var(--card);border-bottom:1px solid var(--border);padding:10px
 .btn-blue:not(:disabled):hover{background:#163050}
 
 /* ── Tab bar ── */
-.tabbar{background:var(--card);border-bottom:1px solid var(--border);display:flex;padding:0 18px;gap:2px}
+.tabbar{background:var(--card);border-bottom:1px solid var(--border);display:flex;padding:0 18px;gap:2px;position:sticky;top:49px;z-index:490}
 .tabbtn{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:10px 16px;cursor:pointer;font-family:inherit;font-size:11px;text-transform:uppercase;letter-spacing:.5px;transition:all .15s}
 .tabbtn.active{color:var(--blue);border-bottom-color:var(--blue)}
 .tabbtn:hover:not(.active){color:var(--text)}
@@ -112,6 +112,14 @@ table.pkts tr.is-rule:hover td{background:#0d0d22}
 .rule-cell{color:var(--blue);font-size:11px;cursor:help}
 .empty-row{color:var(--muted);text-align:center;padding:32px}
 .host{color:var(--muted);font-size:10px;display:block;margin-top:1px}
+.ip-lbl{background:#2d1f4a;border:1px solid var(--purple);color:var(--purple);border-radius:3px;padding:0 4px;font-size:10px;margin-right:4px;white-space:nowrap}
+.label-form{display:flex;gap:8px;padding:10px;align-items:center;flex-wrap:wrap}
+.label-form input{background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:4px 8px;font-family:inherit;font-size:12px}
+.label-form input:first-child{width:150px}.label-form input:nth-child(2){flex:1;min-width:160px}
+.label-row{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);font-size:12px}
+.label-row:last-child{border-bottom:none}
+.label-ip{color:var(--blue);flex:0 0 140px;font-size:11px}
+.label-name{flex:1;color:var(--purple)}
 
 /* ── Bandwidth tab ── */
 .bw-wrap{padding:16px;height:340px}
@@ -238,6 +246,19 @@ table.conns tr:hover td{background:var(--card2)}
       <button class="btn btn-ghost" style="padding:2px 10px;font-size:11px" onclick="clearAlerts()">Clear</button>
     </div>
     <div class="anomaly-scroll" id="alertList"><div class="no-alerts">No anomalies detected yet</div></div>
+  </div>
+
+  <!-- IP Labels -->
+  <div class="panel">
+    <div class="panel-head">IP Labels
+      <span class="panel-head-right" id="labelCount">0 labels</span>
+    </div>
+    <div class="label-form">
+      <input type="text" id="lblIP" placeholder="IP address (e.g. 192.168.1.1)">
+      <input type="text" id="lblName" placeholder="Label (e.g. My Router)" onkeydown="if(event.key==='Enter')setLabel()">
+      <button class="btn btn-blue" onclick="setLabel()">+ Set Label</button>
+    </div>
+    <div id="labelList"><div style="padding:6px 10px;color:var(--muted);font-size:11px">No labels set yet</div></div>
   </div>
 
   <!-- packet table -->
@@ -424,6 +445,7 @@ let ipCounts     = {};   // src ip -> count
 let dstCounts    = {};   // dst ip -> count
 let ipHostnames  = {};   // ip -> hostname
 let ipGeo        = {};   // ip -> {country,countryCode,lat,lon,isp}
+let ipLabels     = {};   // ip -> custom label
 let connMap      = {};   // key -> flow object
 let bwHistory    = [];
 let alertRules   = [];
@@ -531,7 +553,8 @@ function addMapMarker(ip, geo) {
   const r     = Math.max(5, Math.min(22, Math.log(count + 1) * 3.5));
   const color = markerColor(count);
   const host  = ipHostnames[ip] || ip;
-  const popup = `<b>${ip}</b><br>${host !== ip ? host+'<br>' : ''}${geo.country || ''}<br><small>${geo.isp || ''}</small>`;
+  const lbl   = ipLabels[ip] ? `<span style="color:#bc8cff">${ipLabels[ip]}</span><br>` : '';
+  const popup = `<b>${ip}</b><br>${lbl}${host !== ip ? host+'<br>' : ''}${geo.country || ''}<br><small>${geo.isp || ''}</small>`;
 
   if (mapMarkers[ip]) {
     mapMarkers[ip].setRadius(r).setStyle({color, fillColor:color}).setPopupContent(popup);
@@ -646,6 +669,7 @@ socket.on('conn_bulk', list => {
 });
 
 socket.on('rules_state', rules => { alertRules = rules; renderRules(); });
+socket.on('labels_state', d => { ipLabels = d; renderLabels(); tblDirty = true; ipDirty = true; });
 socket.on('stats_reset', () => {
   packets=[]; alerts=[]; ruleAlerts=[]; protoCounts={TCP:0,UDP:0,ICMP:0,OTHER:0};
   ipCounts={}; dstCounts={}; ipHostnames={}; ipGeo={}; connMap={};
@@ -686,6 +710,47 @@ setInterval(() => {
 // ── Render: packet table ──────────────────────────────────────────────────
 function markDirty() { tblDirty = true; }
 
+// ── IP label helpers ─────────────────────────────────────────────────────
+function fmtIPCell(ip) {
+  const lbl  = ipLabels[ip];
+  const host = ipHostnames[ip];
+  if (lbl) return `<span class="ip-lbl">${esc(lbl)}</span>${ip}`;
+  if (host && host !== ip) return `<span class="host">${truncate(host,22)}</span>`;
+  return ip;
+}
+
+function setLabel() {
+  const ip    = (document.getElementById('lblIP').value || '').trim();
+  const label = (document.getElementById('lblName').value || '').trim();
+  if (!ip) return;
+  socket.emit('set_ip_label', {ip, label});
+  document.getElementById('lblIP').value = '';
+  document.getElementById('lblName').value = '';
+}
+
+function removeLabel(ip) {
+  socket.emit('set_ip_label', {ip, label: ''});
+}
+
+function renderLabels() {
+  const entries = Object.entries(ipLabels);
+  const el = document.getElementById('labelList');
+  const count = document.getElementById('labelCount');
+  if (count) count.textContent = `${entries.length} label${entries.length!==1?'s':''}`;
+  if (!el) return;
+  if (!entries.length) {
+    el.innerHTML = '<div style="padding:6px 10px;color:var(--muted);font-size:11px">No labels set yet</div>';
+    return;
+  }
+  el.innerHTML = entries.map(([ip, lbl]) =>
+    `<div class="label-row">
+      <span class="label-ip">${esc(ip)}</span>
+      <span class="label-name">${esc(lbl)}</span>
+      <button class="btn btn-ghost" style="padding:1px 8px;font-size:10px" onclick="removeLabel('${esc(ip)}')">&#x2715;</button>
+    </div>`
+  ).join('');
+}
+
 function getFiltered() {
   const proto = document.getElementById('fProto').value;
   const ip    = document.getElementById('fIP').value.trim().toLowerCase();
@@ -715,16 +780,14 @@ function renderTable() {
   tbody.innerHTML = rows.slice(0,200).map(p => {
     const isA = p.anomalies && p.anomalies.length;
     const isR = p.rule_alerts && p.rule_alerts.length;
-    const srcH = ipHostnames[p.src_ip];
-    const dstH = ipHostnames[p.dst_ip];
     const flag = isA ? `<span class="flag-cell" title="${esc(p.anomalies.join(' | '))}">&#9888; ${p.anomalies.length}</span>` : '';
     const ruleFlag = isR ? `<span class="rule-cell" title="${esc(p.rule_alerts.join(', '))}"> &#9654;${p.rule_alerts.length}</span>` : '';
     return `<tr class="${isA?'is-anomaly':isR?'is-rule':''}">
       <td>${p.timestamp}</td>
       <td><span class="badge b-${p.protocol}">${p.protocol}</span></td>
-      <td title="${p.src_ip}">${srcH&&srcH!==p.src_ip?`<span class="host">${truncate(srcH,22)}</span>`:p.src_ip}</td>
+      <td title="${p.src_ip}">${fmtIPCell(p.src_ip)}</td>
       <td>${p.src_port??'—'}</td>
-      <td title="${p.dst_ip}">${dstH&&dstH!==p.dst_ip?`<span class="host">${truncate(dstH,22)}</span>`:p.dst_ip}</td>
+      <td title="${p.dst_ip}">${fmtIPCell(p.dst_ip)}</td>
       <td>${p.dst_port??'—'}</td>
       <td>${p.size}</td>
       <td>${flag}${ruleFlag}</td>
@@ -744,14 +807,13 @@ function renderTopIPs() {
     if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No traffic yet</td></tr>'; return; }
     const mx = maxCount || (sorted[0]?.[1] || 1);
     tbody.innerHTML = sorted.map(([ip,cnt],i) => {
-      const h   = ipHostnames[ip];
       const geo = ipGeo[ip];
       const pct = Math.round(cnt/mx*100);
       const flag = geo?.countryCode ? getFlagEmoji(geo.countryCode) : '';
       const country = geo?.country || '';
       return `<tr>
         <td style="color:var(--muted)">${i+1}</td>
-        <td title="${ip}" style="color:var(--blue)">${h&&h!==ip?truncate(h,22):ip}</td>
+        <td title="${ip}">${fmtIPCell(ip)}</td>
         <td>${fmt(cnt)}</td>
         <td title="${country}">${flag}</td>
         <td><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>

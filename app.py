@@ -93,6 +93,12 @@ rules_lock   = threading.Lock()
 alert_rules  = []
 rule_alerts  = deque(maxlen=500)
 
+# ---------------------------------------------------------------------------
+# IP Labels
+# ---------------------------------------------------------------------------
+labels_lock = threading.Lock()
+ip_labels   = {}
+
 
 # ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -133,7 +139,7 @@ def geo_worker(q):
         if ip is None:
             break
         with geo_lock:
-            already = ip in geo_cache
+            already = bool(geo_cache.get(ip))  # None means pending, dict means resolved
         if not already and _GEO_ENABLED:
             try:
                 r = _requests.get(
@@ -426,6 +432,8 @@ def on_connect():
     with rules_lock:
         sock_emit('rules_state', list(alert_rules))
     sock_emit('rule_history', list(rule_alerts))
+    with labels_lock:
+        sock_emit('labels_state', dict(ip_labels))
 
 
 @socketio.on('start_capture')
@@ -496,6 +504,21 @@ def on_remove_rule(data):
         alert_rules[:] = [r for r in alert_rules if r['id'] != data.get('id')]
         rules = list(alert_rules)
     sock_emit('rules_state', rules)
+
+
+@socketio.on('set_ip_label')
+def on_set_label(data):
+    ip    = (data.get('ip') or '').strip()
+    label = (data.get('label') or '').strip()
+    if not ip:
+        return
+    with labels_lock:
+        if label:
+            ip_labels[ip] = label
+        else:
+            ip_labels.pop(ip, None)
+        snap = dict(ip_labels)
+    socketio.emit('labels_state', snap)
 
 
 # ─── Startup ──────────────────────────────────────────────────────────────────
